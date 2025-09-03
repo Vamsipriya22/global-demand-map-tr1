@@ -42,7 +42,7 @@
       "USA": { years: 25, link: "https://github.com/yourrepo/usa" },
       "FRA": { years: 8,  link: "https://github.com/yourrepo/france" },
       "BRA": { years: 3,  link: "https://github.com/yourrepo/brazil" }
-      // extend with all countries...
+      // Add more countries here...
     };
 
     // Initialize map
@@ -59,6 +59,10 @@
       .then(res => res.json())
       .then(data => {
         L.geoJson(data, {
+          // Filter Antarctica out
+          filter: function(feature) {
+            return feature.properties.name !== "Antarctica";
+          },
           style: function(feature) {
             const iso = feature.id;
             const info = countryData[iso];
