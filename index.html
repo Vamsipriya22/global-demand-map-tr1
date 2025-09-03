@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Clickable World Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    #map { height: 650px; width: 100%; }
+    .legend {
+      background: white;
+      padding: 10px;
+      font-size: 14px;
+      line-height: 18px;
+      color: #333;
+    }
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <h2>Countries with Electricity Demand Data</h2>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Define colors for availability ranges
+    function getColor(years) {
+      return years >= 20 ? '#006400' :      // darkest green
+             years >= 10 ? '#228B22' :      // medium green
+             years >= 5  ? '#32CD32' :      // light green
+                           '#90EE90';       // very light green
+    }
+
+    // Example: data mapping country ISO -> {years, link}
+    const countryData = {
+      "IND": { years: 12, link: "https://github.com/yourrepo/india" },
+      "USA": { years: 25, link: "https://github.com/yourrepo/usa" },
+      "FRA": { years: 8,  link: "https://github.com/yourrepo/france" },
+      "BRA": { years: 3,  link: "https://github.com/yourrepo/brazil" }
+      // extend with all countries...
+    };
+
+    // Initialize map
+    var map = L.map('map').setView([20, 0], 2);
+
+    // Add background tiles
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 5,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Load world GeoJSON
+    fetch("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
+      .then(res => res.json())
+      .then(data => {
+        L.geoJson(data, {
+          style: function(feature) {
+            const iso = feature.id;
+            const info = countryData[iso];
+            return {
+              fillColor: info ? getColor(info.years) : '#ccc',
+              weight: 1,
+              color: 'black',
+              fillOpacity: 0.8
+            };
+          },
+          onEachFeature: function (feature, layer) {
+            const iso = feature.id;
+            const info = countryData[iso];
+            if (info) {
+              layer.on('click', function () {
+                window.open(info.link, "_blank");
+              });
+              layer.bindTooltip(`${feature.properties.name}: ${info.years} years`);
+            }
+          }
+        }).addTo(map);
+      });
+
+    // Add legend
+    var legend = L.control({position: 'bottomright'});
+    legend.onAdd = function (map) {
+      var div = L.DomUtil.create('div', 'legend'),
+          grades = [0, 5, 10, 20],
+          labels = [];
+      div.innerHTML = '<b>Years of Data</b><br>';
+      for (var i = 0; i < grades.length; i++) {
+        div.innerHTML +=
+          '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+          grades[i] + (grades[i + 1] ? '&ndash;' + (grades[i + 1] - 1) + '<br>' : '+');
+      }
+      return div;
+    };
+    legend.addTo(map);
+  </script>
+</body>
+</html>
