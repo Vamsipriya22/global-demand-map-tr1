@@ -1,106 +1,119 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Clickable World Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <meta charset="utf-8" />
+  <title>Clickable World Map (No Antarctica)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
-    #map { height: 650px; width: 100%; }
-    .legend {
-      background: white;
-      padding: 10px;
-      font-size: 14px;
-      line-height: 18px;
-      color: #333;
-    }
-    .legend i {
-      width: 18px;
-      height: 18px;
-      float: left;
-      margin-right: 8px;
-      opacity: 0.8;
-    }
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
   </style>
 </head>
 <body>
-  <h2>Countries with Electricity Demand Data</h2>
   <div id="map"></div>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Define colors for availability ranges
-    function getColor(years) {
-      return years >= 20 ? '#006400' :      // darkest green
-             years >= 10 ? '#228B22' :      // medium green
-             years >= 5  ? '#32CD32' :      // light green
-                           '#90EE90';       // very light green
-    }
+    // Create the Map
+    const map = new maplibregl.Map({
+      container: "map",
+      style: "https://demotiles.maplibre.org/style.json", // Default MapLibre style
+      center: [12, 44], // [Longitude, Latitude]
+      zoom: 1.5,
+      pitch: 0,
+      bearing: 0,
+      antialias: true,
+    });
 
-    // Example: data mapping country ISO -> {years, link}
+    // Sample demand data with country colors and links
     const countryData = {
-      "IND": { years: 12, link: "https://github.com/yourrepo/india" },
-      "USA": { years: 25, link: "https://github.com/yourrepo/usa" },
-      "FRA": { years: 8,  link: "https://github.com/yourrepo/france" },
-      "BRA": { years: 3,  link: "https://github.com/yourrepo/brazil" }
-      // Add more countries here...
+      Algeria: {
+        color: "#267326",
+        link: "https://data.mendeley.com/datasets/z5x2d3mhw7/1",
+      },
+      Nigeria: {
+        color: "#B2D8B2",
+        link: "https://data.mendeley.com/datasets/pxvdm26rn7/2",
+      },
+      "South Africa": {
+        color: "#67B367",
+        link: "https://www.eskom.co.za/dataportal/data-request-form/",
+      },
+      "New Zealand": {
+        color: "#0D400D",
+        link: "https://www.emi.ea.govt.nz/Wholesale/Reports/W_GD_C",
+      },
     };
 
-    // Initialize map
-    var map = L.map('map').setView([20, 0], 2);
+    // Load country boundaries from GeoJSON
+    map.on("load", function () {
+      fetch("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
+        .then((response) => response.json())
+        .then((data) => {
+          // ✅ Remove Antarctica so it doesn't dominate the map
+          data.features = data.features.filter(
+            (f) => f.properties.name !== "Antarctica"
+          );
 
-    // Add background tiles
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 5,
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+          // Add countries source
+          map.addSource("countries", {
+            type: "geojson",
+            data: data,
+          });
 
-    // Load world GeoJSON
-    fetch("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
-      .then(res => res.json())
-      .then(data => {
-        L.geoJson(data, {
-          // Filter Antarctica out
-          filter: function(feature) {
-            return feature.properties.name !== "Antarctica";
-          },
-          style: function(feature) {
-            const iso = feature.id;
-            const info = countryData[iso];
-            return {
-              fillColor: info ? getColor(info.years) : '#ccc',
-              weight: 1,
-              color: 'black',
-              fillOpacity: 0.8
-            };
-          },
-          onEachFeature: function (feature, layer) {
-            const iso = feature.id;
-            const info = countryData[iso];
-            if (info) {
-              layer.on('click', function () {
-                window.open(info.link, "_blank");
-              });
-              layer.bindTooltip(`${feature.properties.name}: ${info.years} years`);
+          // Country fill layer
+          map.addLayer({
+            id: "country-fills",
+            type: "fill",
+            source: "countries",
+            layout: {},
+            paint: {
+              "fill-color": [
+                "match",
+                ["get", "name"],
+                ...Object.entries(countryData).flatMap(([name, info]) => [
+                  name,
+                  info.color,
+                ]),
+                "#AAAAAA", // Default gray for countries without data
+              ],
+              "fill-opacity": 1.0,
+            },
+          });
+
+          // Country border layer
+          map.addLayer({
+            id: "country-borders",
+            type: "line",
+            source: "countries",
+            layout: {},
+            paint: {
+              "line-color": "#000",
+              "line-width": 1,
+            },
+          });
+
+          // Click Event for Countries
+          map.on("click", "country-fills", function (e) {
+            const countryName = e.features[0].properties.name;
+            const countryInfo = countryData[countryName];
+
+            if (countryInfo) {
+              window.open(countryInfo.link, "_blank"); // Open demand data link
+            } else {
+              alert("No demand data available for " + countryName);
             }
-          }
-        }).addTo(map);
-      });
+          });
 
-    // Add legend
-    var legend = L.control({position: 'bottomright'});
-    legend.onAdd = function (map) {
-      var div = L.DomUtil.create('div', 'legend'),
-          grades = [0, 5, 10, 20],
-          labels = [];
-      div.innerHTML = '<b>Years of Data</b><br>';
-      for (var i = 0; i < grades.length; i++) {
-        div.innerHTML +=
-          '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
-          grades[i] + (grades[i + 1] ? '&ndash;' + (grades[i + 1] - 1) + '<br>' : '+');
-      }
-      return div;
-    };
-    legend.addTo(map);
+          // Change cursor on hover
+          map.on("mouseenter", "country-fills", function () {
+            map.getCanvas().style.cursor = "pointer";
+          });
+          map.on("mouseleave", "country-fills", function () {
+            map.getCanvas().style.cursor = "";
+          });
+        });
+    });
   </script>
 </body>
 </html>
